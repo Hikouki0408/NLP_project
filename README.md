@@ -52,3 +52,12 @@ It contains the following 6 fields:
 6. text: the text of the tweet (Lyx is cool)
 
 Source is available at: [https://www.kaggle.com/datasets/kazanova/sentiment140?resource=download](https://www.kaggle.com/datasets/kazanova/sentiment140?resource=download).
+
+## Data Splitting
+1. Training Set: There are 1,152,000 instances (tweets) in the training set. This set is used to train your sentiment analysis model. It's the largest set and contains the most data for training the model's parameters.
+
+2. Validation Set: There are 128,000 instances (tweets) in the validation set. This set is used for tuning hyperparameters and monitoring the model's performance during training. It helps prevent overfitting by providing an independent dataset for assessing how well the model generalizes to new data.
+
+3. Test Set: There are 320,000 instances (tweets) in the test set. This set is used to evaluate the final performance of your trained model. After your model is trained and its hyperparameters are tuned using the training and validation sets, you use the test set to assess how well the model performs on unseen data. This helps you estimate how well your model will perform in real-world scenarios.
+
+- It's important to have distinct training, validation, and test sets to ensure a fair evaluation of your model's performance and to avoid data leakage (the model "knowing" the test data during training). The specific sizes of these sets can vary depending on factors like the size of your dataset and the complexity of your model. In your case, the sizes seem reasonable given the large size of the Sentiment140 dataset.
