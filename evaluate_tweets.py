@@ -1,6 +1,8 @@
 import csv
 import pandas as pd
 import torch
+import torch.nn as nn
+import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 from nltk.tokenize import word_tokenize
@@ -8,7 +10,7 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Define a mapping of sentiment labels to numerical values
-sentiment_map = {'negative': '0', 'neutral': '2', 'positive': '4'}
+sentiment_map = {'negative': 0, 'neutral': 2, 'positive': 4}
 
 # Define a custom dataset class
 class SentimentDataset(Dataset):
@@ -25,10 +27,27 @@ class SentimentDataset(Dataset):
         sentiment = self.data.iloc[idx]['sentiment']
         tokens = self.tokenizer(text)
         tfidf_features = self.tfidf_vectorizer.transform([" ".join(tokens)]).toarray()[0]
-        return tfidf_features, sentiment
+
+        # Map sentiment labels to numerical values here
+        sentiment_label = sentiment_map[sentiment]
+
+        return torch.FloatTensor(tfidf_features), torch.LongTensor([sentiment_label])
+
+# Define a simple sentiment analysis model
+class SentimentModel(nn.Module):
+    def __init__(self, input_size, num_classes):
+        super(SentimentModel, self).__init__()
+        self.fc = nn.Linear(input_size, num_classes)
+
+    def forward(self, x):
+        return self.fc(x)
 
 # Define a tokenizer (you can customize this further)
 def tokenize_text(text):
+    # Check if the input is a string
+    if not isinstance(text, str):
+        return []
+
     # Tokenize text and remove stopwords
     tokens = word_tokenize(text)
     tokens = [word.lower() for word in tokens if word.isalpha() and word.lower() not in stopwords.words('english')]
@@ -44,7 +63,7 @@ def map_sentiment(value):
     else:
         return 'unknown'
 
-def read_text_from_csv(file_path, max_instances=100):
+def read_text_from_csv(file_path, max_instances=1000):
     try:
         text_list = []
         with open(file_path, 'r', encoding='latin-1') as csv_file:
@@ -81,9 +100,19 @@ def preprocess_data(data):
 
     return tokenized_data, labels, tfidf_vectorizer
 
+def train_model(train_loader, model, criterion, optimizer, num_epochs=10):
+    for epoch in range(num_epochs):
+        for inputs, labels in train_loader:
+            optimizer.zero_grad()
+            outputs = model(inputs.float())
+            loss = criterion(outputs, labels.squeeze())  # Use squeeze to remove extra dimension
+            loss.backward()
+            optimizer.step()
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 100  # Specify the maximum number of instances to read
+    max_instances = 1000  # Specify the maximum number of instances to read
 
     text_list = read_text_from_csv(file_path, max_instances)
 
@@ -97,8 +126,26 @@ def main():
     # Preprocess the data
     tokenized_data, labels, tfidf_vectorizer = preprocess_data(text_list)
 
-    # Continue with the code to split the data, build, and train your sentiment analysis model
-    # (Insert the code for data splitting, model development, training, evaluation, and inference here)
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(tokenized_data, labels, test_size=0.2, random_state=42)
+
+    # Create data loaders
+    train_dataset = SentimentDataset(pd.DataFrame(X_train, columns=['sentiment', 'text']), tokenize_text, tfidf_vectorizer)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+    # Define model parameters
+    input_size = len(tfidf_vectorizer.get_feature_names_out())
+    num_classes = len(set(labels))
+
+    # Initialize the model and optimizer
+    model = SentimentModel(input_size, num_classes)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # Train the model
+    train_model(train_loader, model, criterion, optimizer, num_epochs=10)
+
+    # Continue with evaluation and inference as needed
 
 if __name__ == "__main__":
     main()
