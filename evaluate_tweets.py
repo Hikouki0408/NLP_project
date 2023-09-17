@@ -4,10 +4,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import numpy as np
 
 # Define a mapping of sentiment labels to numerical values
 sentiment_map = {'negative': 0, 'neutral': 2, 'positive': 4}
@@ -15,32 +17,35 @@ sentiment_map = {'negative': 0, 'neutral': 2, 'positive': 4}
 # Define a custom dataset class
 class SentimentDataset(Dataset):
     def __init__(self, dataframe, tokenizer, tfidf_vectorizer):
-        self.data = dataframe
-        self.tokenizer = tokenizer
-        self.tfidf_vectorizer = tfidf_vectorizer
+        self.data = dataframe  # Store the DataFrame containing the data
+        self.tokenizer = tokenizer  # Store the tokenizer function
+        self.tfidf_vectorizer = tfidf_vectorizer  # Store the TF-IDF vectorizer
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data)  # Return the number of data instances
 
     def __getitem__(self, idx):
-        text = self.data.iloc[idx]['text']
-        sentiment = self.data.iloc[idx]['sentiment']
-        tokens = self.tokenizer(text)
-        tfidf_features = self.tfidf_vectorizer.transform([" ".join(tokens)]).toarray()[0]
+        text = self.data.iloc[idx]['text']  # Get the text from the DataFrame
+        sentiment = self.data.iloc[idx]['sentiment']  # Get the sentiment label from the DataFrame
+        tokens = self.tokenizer(text)  # Tokenize the text
+        tfidf_features = self.tfidf_vectorizer.transform([" ".join(tokens)]).toarray()[0]  # Compute TF-IDF features
 
         # Map sentiment labels to numerical values here
-        sentiment_label = sentiment_map[sentiment]
+        sentiment_label = sentiment_map[sentiment]  # Convert sentiment label to numerical value
 
-        return torch.FloatTensor(tfidf_features), torch.LongTensor([sentiment_label])
+        return torch.FloatTensor(tfidf_features), torch.LongTensor([sentiment_label])  # Return TF-IDF features and sentiment label
 
-# Define a simple sentiment analysis model
+# Define a simple LSTM-based sentiment analysis model
 class SentimentModel(nn.Module):
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(SentimentModel, self).__init__()
-        self.fc = nn.Linear(input_size, num_classes)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        return self.fc(x)
+        out, _ = self.lstm(x)
+        out = self.fc(out[:, -1, :])  # Use the output of the last time step
+        return out
 
 # Define a tokenizer (you can customize this further)
 def tokenize_text(text):
@@ -49,10 +54,11 @@ def tokenize_text(text):
         return []
 
     # Tokenize text and remove stopwords
-    tokens = word_tokenize(text)
-    tokens = [word.lower() for word in tokens if word.isalpha() and word.lower() not in stopwords.words('english')]
-    return tokens
+    tokens = word_tokenize(text)  # Tokenize the input text
+    tokens = [word.lower() for word in tokens if word.isalpha() and word.lower() not in stopwords.words('english')]  # Preprocess tokens
+    return tokens  # Return the tokenized and preprocessed tokens
 
+# Define a function to map numerical sentiment values to labels
 def map_sentiment(value):
     if value == '0':
         return 'negative'
@@ -63,6 +69,7 @@ def map_sentiment(value):
     else:
         return 'unknown'
 
+# Define a function to read text data from a CSV file
 def read_text_from_csv(file_path, max_instances=1000):
     try:
         text_list = []
@@ -85,6 +92,7 @@ def read_text_from_csv(file_path, max_instances=1000):
         print("An error occurred:", e)
         return None
 
+# Define a function to preprocess the data
 def preprocess_data(data):
     # Tokenize text and remove stopwords
     tokenized_data = [(sentiment, tokenize_text(text)) for sentiment, text in data]
@@ -93,28 +101,52 @@ def preprocess_data(data):
     tfidf_vectorizer = TfidfVectorizer(max_features=5000, tokenizer=lambda x: x, preprocessor=lambda x: x)
 
     # Fit the vectorizer on the tokenized text data
-    tfidf_vectorizer.fit([text for sentiment, text in tokenized_data])
+    tfidf_vectorizer.fit([" ".join(tokens) for _, tokens in tokenized_data])
 
     # Map sentiment labels to numerical values
     labels = [sentiment_map[sentiment] for sentiment, _ in data]
 
-    return tokenized_data, labels, tfidf_vectorizer
+    return labels, tfidf_vectorizer
 
+# Define a function to train the model
 def train_model(train_loader, model, criterion, optimizer, num_epochs=10):
     for epoch in range(num_epochs):
+        model.train()  # Set the model to training mode
+        total_loss = 0.0
         for inputs, labels in train_loader:
-            optimizer.zero_grad()
-            outputs = model(inputs.float())
-            loss = criterion(outputs, labels.squeeze())  # Use squeeze to remove extra dimension
-            loss.backward()
-            optimizer.step()
-        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+            optimizer.zero_grad()  # Zero the gradients
+            outputs = model(inputs)  # Forward pass through the model
+            loss = criterion(outputs, labels.squeeze())  # Calculate the loss
+            loss.backward()  # Backpropagation
+            optimizer.step()  # Update model parameters
+            total_loss += loss.item()
+        average_loss = total_loss / len(train_loader)
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {average_loss:.4f}')
 
+# Define a function for model evaluation
+def evaluate_model(model, test_loader):
+    model.eval()  # Set the model to evaluation mode
+    y_true = []
+    y_pred = []
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            y_true.extend(labels.cpu().numpy())
+            y_pred.extend(predicted.cpu().numpy())
+
+    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, average='weighted')
+    recall = recall_score(y_true, y_pred, average='weighted')
+    f1 = f1_score(y_true, y_pred, average='weighted')
+    print(f'Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1:.4f}')
+
+# Define the main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
     max_instances = 1000  # Specify the maximum number of instances to read
 
-    text_list = read_text_from_csv(file_path, max_instances)
+    text_list = read_text_from_csv(file_path, max_instances)  # Read text data from CSV
 
     if text_list:
         print("Sentiment and Text from columns A and F:")
@@ -124,28 +156,35 @@ def main():
         print("Failed to read text from the CSV file.")
 
     # Preprocess the data
-    tokenized_data, labels, tfidf_vectorizer = preprocess_data(text_list)
+    labels, tfidf_vectorizer = preprocess_data(text_list)
 
     # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(tokenized_data, labels, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(tfidf_vectorizer.transform([" ".join(tokens) for _, tokens in text_list]), labels, test_size=0.2, random_state=42)
 
     # Create data loaders
-    train_dataset = SentimentDataset(pd.DataFrame(X_train, columns=['sentiment', 'text']), tokenize_text, tfidf_vectorizer)
+    train_dataset = torch.utils.data.TensorDataset(torch.FloatTensor(X_train.toarray()), torch.LongTensor(y_train))
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
+    test_dataset = torch.utils.data.TensorDataset(torch.FloatTensor(X_test.toarray()), torch.LongTensor(y_test))
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
     # Define model parameters
-    input_size = len(tfidf_vectorizer.get_feature_names_out())
+    input_size = X_train.shape[1]
+    hidden_size = 128
+    num_layers = 2
     num_classes = len(set(labels))
 
     # Initialize the model and optimizer
-    model = SentimentModel(input_size, num_classes)
+    model = SentimentModel(input_size, hidden_size, num_layers, num_classes)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # Train the model
     train_model(train_loader, model, criterion, optimizer, num_epochs=10)
 
-    # Continue with evaluation and inference as needed
+    # Evaluate the model
+    print("Model Evaluation:")
+    evaluate_model(model, test_loader)
 
 if __name__ == "__main__":
     main()
