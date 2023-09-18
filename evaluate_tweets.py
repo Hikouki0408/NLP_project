@@ -70,12 +70,12 @@ def map_sentiment(value):
         return 'unknown'
 
 # Define a function to read text data from a CSV file
-def read_text_from_csv(file_path, max_instances=1000):
+def read_text_from_csv(file_path):
     try:
         text_list = []
         with open(file_path, 'r', encoding='latin-1') as csv_file:
             csv_reader = csv.reader(csv_file)
-            for idx, row in enumerate(csv_reader, start=1):
+            for row in csv_reader:
                 if len(row) >= 6:  # Checking if column F exists in the row
                     sentiment_label = row[0]
                     sentiment = map_sentiment(sentiment_label)
@@ -83,9 +83,6 @@ def read_text_from_csv(file_path, max_instances=1000):
                     text_list.append((sentiment, text))
                 else:
                     text_list.append(('unknown', ''))  # Append unknown sentiment and empty text if columns don't exist
-
-                if idx >= max_instances:
-                    break  # Stop reading after reaching max_instances
 
         return text_list
     except Exception as e:
@@ -106,12 +103,12 @@ def preprocess_data(data):
     # Map sentiment labels to numerical values
     labels = [sentiment_map[sentiment] for sentiment, _ in data]
 
-    return labels, tfidf_vectorizer
+    return tokenized_data, labels, tfidf_vectorizer
 
-# Define a function to train the model
+# Define a function for model training
 def train_model(train_loader, model, criterion, optimizer, num_epochs=10):
+    model.train()  # Set the model to training mode
     for epoch in range(num_epochs):
-        model.train()  # Set the model to training mode
         total_loss = 0.0
         for inputs, labels in train_loader:
             optimizer.zero_grad()  # Zero the gradients
@@ -144,9 +141,8 @@ def evaluate_model(model, test_loader):
 # Define the main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 1000  # Specify the maximum number of instances to read
 
-    text_list = read_text_from_csv(file_path, max_instances)  # Read text data from CSV
+    text_list = read_text_from_csv(file_path)  # Read text data from CSV
 
     if text_list:
         print("Sentiment and Text from columns A and F:")
@@ -161,7 +157,7 @@ def main():
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(tfidf_vectorizer.transform([" ".join(tokens) for _, tokens in text_list]), labels, test_size=0.2, random_state=42)
 
-    # Create data loaders
+    # Create data loaders for batch processing
     train_dataset = torch.utils.data.TensorDataset(torch.FloatTensor(X_train.toarray()), torch.LongTensor(y_train))
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 
