@@ -144,26 +144,20 @@ def main():
 
     text_list = read_text_from_csv(file_path)  # Read text data from CSV
 
-    if text_list:
-        print("Sentiment and Text from columns A and F:")
-        for idx, (sentiment, text) in enumerate(text_list, start=1):
-            print(f"{idx}: {sentiment.capitalize()}: {text}")
-    else:
-        print("Failed to read text from the CSV file.")
 
     # Preprocess the data
     labels, tfidf_vectorizer = preprocess_data(text_list)
-
+    print("Here 1")
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(tfidf_vectorizer.transform([" ".join(tokens) for _, tokens in text_list]), labels, test_size=0.2, random_state=42)
-
+    print("Here 2")
     # Create data loaders for batch processing
     train_dataset = torch.utils.data.TensorDataset(torch.FloatTensor(X_train.toarray()), torch.LongTensor(y_train))
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-
+    print("Here 3")
     test_dataset = torch.utils.data.TensorDataset(torch.FloatTensor(X_test.toarray()), torch.LongTensor(y_test))
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-
+    print("Here 4")
     # Define model parameters
     input_size = X_train.shape[1]
     hidden_size = 128
@@ -175,6 +169,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+    print("Here 5")
     # Train the model
     train_model(train_loader, model, criterion, optimizer, num_epochs=10)
 
