@@ -12,7 +12,7 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
 # Define a mapping of sentiment labels to numerical values
-sentiment_map = {'negative': 0, 'neutral': 2, 'positive': 4}
+sentiment_map = {'negative': 0, 'neutral': 1, 'positive': 2}
 
 # Define a custom dataset class
 class SentimentDataset(Dataset):
@@ -151,7 +151,30 @@ def main():
     # Train the model
     train_model(train_loader, model, criterion, optimizer, num_epochs=10)
 
-    # Continue with evaluation and inference as needed
+    # Evaluate the model on the test set
+    test_dataset = SentimentDataset(pd.DataFrame(X_test, columns=['sentiment', 'text']), tokenize_text, tfidf_vectorizer)
+    test_loader = DataLoader(test_dataset, batch_size=32)
+    
+    model.eval()  # Set the model to evaluation mode
+    all_predictions = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            outputs = model(inputs.float())
+            _, predicted = torch.max(outputs, 1)
+            all_predictions.extend(predicted.tolist())
+            all_labels.extend(labels.squeeze().tolist())
+    
+    accuracy = accuracy_score(all_labels, all_predictions)
+    precision = precision_score(all_labels, all_predictions, average='weighted')
+    recall = recall_score(all_labels, all_predictions, average='weighted')
+    f1 = f1_score(all_labels, all_predictions, average='weighted')
+    
+    print(f'Test Accuracy: {accuracy:.4f}')
+    print(f'Test Precision: {precision:.4f}')
+    print(f'Test Recall: {recall:.4f}')
+    print(f'Test F1-Score: {f1:.4f}')
 
 if __name__ == "__main__":
     main()
