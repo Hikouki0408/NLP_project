@@ -119,8 +119,7 @@ def train_model(train_loader, model, criterion, optimizer, num_epochs=10):
 # Define the main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    # Read text data from CSV up to 1,500,000 instances
-    text_list = read_text_from_csv(file_path, max_instances=15000)
+    text_list = read_text_from_csv(file_path)
 
     if text_list:
         print("Sentiment and Text from columns A and F:")
