@@ -3,6 +3,8 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
 
 # Download NLTK stopwords if you haven't already
 nltk.download('stopwords')
@@ -61,7 +63,7 @@ def read_text_from_csv(file_path, max_instances=100):
 
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 100   # Specify the maximum number of instances to read
+    max_instances = 100  # Specify the maximum number of instances to read
 
     text_list = read_text_from_csv(file_path, max_instances)
 
@@ -73,6 +75,23 @@ def main():
             # Test print statement to check preprocessing
             original_text = read_text_from_csv(file_path, max_instances)[idx-1][1]
             print(f"Original Text: {original_text}")
+            
+        # Split data into X (features) and y (labels)
+        X = [text for _, text in text_list]
+        y = [sentiment for sentiment, _ in text_list]
+
+        # Split the data into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        print("Training set size:", len(X_train))
+        print("Testing set size:", len(X_test))
+
+        # TF-IDF Vectorization
+        tfidf_vectorizer = TfidfVectorizer()
+        X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)
+        X_test_tfidf = tfidf_vectorizer.transform(X_test)
+
+        print("TF-IDF Vectorization completed.")
     else:
         print("Failed to read text from the CSV file.")
 
