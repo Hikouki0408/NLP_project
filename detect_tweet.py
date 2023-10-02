@@ -5,7 +5,7 @@ from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from transformers import BertTokenizer, BertForSequenceClassification  # Import BERT-related libraries here
+from transformers import BertTokenizer, BertForSequenceClassification
 from torch.utils.data import DataLoader, TensorDataset
 import torch
 from sklearn.metrics import classification_report
@@ -18,13 +18,6 @@ nltk.download('punkt')
 # Define the global tokenizer and label_encoder
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 label_encoder = LabelEncoder()
-
-# Import BERT-related libraries
-from transformers import BertTokenizer, BertForSequenceClassification
-from torch.utils.data import DataLoader, TensorDataset
-import torch
-from sklearn.metrics import classification_report
-from sklearn.preprocessing import LabelEncoder
 
 # Function to map numeric sentiment labels to human-readable labels
 def map_sentiment(value):
@@ -117,7 +110,6 @@ def fine_tune_bert(X_train, y_train):
     # Return the fine-tuned model
     return model
 
-
 # Function to evaluate a BERT model on test data
 def evaluate_bert(model, X_test, y_test):
     # Tokenize and convert test data to PyTorch tensors
@@ -152,7 +144,7 @@ def evaluate_bert(model, X_test, y_test):
 # Main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 100  # Specify the maximum number of instances to read
+    max_instances = 1000  # Specify the maximum number of instances to read
 
     text_list = read_text_from_csv(file_path, max_instances)
 
@@ -163,16 +155,18 @@ def main():
 
             # Test print statement to check preprocessing
             original_text = read_text_from_csv(file_path, max_instances)[idx-1][1]
-            print(f"Original Text: {original_text}")
-            
+            #print(f"Original Text: {original_text}")
+
         # Split data into X (features) and y (labels)
         X = [text for _, text in text_list]
         y = [sentiment for sentiment, _ in text_list]
 
-        # Split the data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Split the data into training, validation, and testing sets
+        X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.4, random_state=42)
+        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
         print("Training set size:", len(X_train))
+        print("Validation set size:", len(X_val))
         print("Testing set size:", len(X_test))
 
         # Fine-tune BERT model
@@ -180,12 +174,13 @@ def main():
 
         # Evaluate BERT model
         report = evaluate_bert(bert_model, X_test, y_test)
-
         print("BERT Model Results (fine-tuning may be needed):")
         print("Classification Report:")
         print(report)
+
     else:
         print("Failed to read text from the CSV file.")
 
 if __name__ == "__main__":
     main()
+
