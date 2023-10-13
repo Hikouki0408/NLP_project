@@ -52,6 +52,7 @@ if __name__ == "__main__":
     main()
 
     """
+    Max_instances = 1600000
     Training Set: There are 1,152,000 instances (tweets) in the training set. This set is used to train your sentiment analysis model. 
     It's the largest set and contains the most data for training the model's parameters.
 

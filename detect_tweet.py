@@ -144,9 +144,8 @@ def evaluate_bert(model, X_test, y_test):
 # Main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 16000  # Specify the maximum number of instances to read
-    #1600000
-
+    max_instances = 1600000  # Specify the maximum number of instances to read
+    
     text_list = read_text_from_csv(file_path, max_instances)
 
     if text_list:
