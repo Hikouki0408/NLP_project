@@ -3,14 +3,13 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import BertTokenizer, BertForSequenceClassification  # Import BERT-related libraries here
 from torch.utils.data import DataLoader, TensorDataset
 import torch
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import f1_score
 
 # Download NLTK stopwords if you haven't already
 nltk.download('stopwords')
@@ -19,6 +18,14 @@ nltk.download('punkt')
 # Define the global tokenizer and label_encoder
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 label_encoder = LabelEncoder()
+
+# Import BERT-related libraries
+from transformers import BertTokenizer, BertForSequenceClassification
+from torch.utils.data import DataLoader, TensorDataset
+import torch
+from sklearn.metrics import classification_report
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import f1_score
 
 # Function to map numeric sentiment labels to human-readable labels
 def map_sentiment(value):
@@ -52,7 +59,7 @@ def preprocess_text(text):
     return text
 
 # Function to read text from a CSV file and preprocess it
-def read_text_from_csv(file_path, max_instances=100):
+def read_text_from_csv(file_path, max_instances=1600000):
     try:
         text_list = []
         with open(file_path, 'r', encoding='latin-1') as csv_file:
@@ -86,17 +93,17 @@ def fine_tune_bert(X_train, y_train, lr=1e-5, batch_size=16, num_epochs=3):
 
     # Encode labels (negative, neutral, positive)
     label_encoder = LabelEncoder()
-    y_train_encoded = label_encoder.fit_transform(y_train)
+    y_train_encoded = label_encoder.fit_transform(y_train)  # Define label_encoder here
 
     # Create DataLoader for batch processing
     train_data = TensorDataset(X_train_encoded.input_ids, X_train_encoded.attention_mask, torch.tensor(y_train_encoded))
     train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
-    # Define optimizer and loss function
+    # Define optimizer and loss function (you may need to fine-tune hyperparameters)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = torch.nn.CrossEntropyLoss()
 
-    # Training loop
+    # Training loop (you may need to adjust the number of epochs and other hyperparameters)
     for epoch in range(num_epochs):
         model.train()
         for batch in train_dataloader:
@@ -109,6 +116,7 @@ def fine_tune_bert(X_train, y_train, lr=1e-5, batch_size=16, num_epochs=3):
 
     # Return the fine-tuned model
     return model
+
 
 # Function to evaluate a BERT model on test data
 def evaluate_bert(model, X_test, y_test):
@@ -139,85 +147,79 @@ def evaluate_bert(model, X_test, y_test):
     # Get classification report
     report = classification_report(y_test_decoded, y_pred_decoded, target_names=['negative', 'neutral', 'positive'])
 
-    return report
+    return report, all_predictions  # Return predictions
 
 # Main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
     max_instances = 1600000  # Specify the maximum number of instances to read
-    
+    # max 1600000
     text_list = read_text_from_csv(file_path, max_instances)
 
     if text_list:
         print("Sentiment and Text from columns A and F (preprocessed):")
-        """
-        for idx, (sentiment, text) in enumerate(text_list, start=1):
-            print(f"{sentiment.capitalize()}: {text}")
-
-            # Test print statement to check preprocessing
-            original_text = read_text_from_csv(file_path, max_instances)[idx-1][1]
-            print(f"Original Text: {original_text}")
-        """
-
+            
         # Split data into X (features) and y (labels)
         X = [text for _, text in text_list]
         y = [sentiment for sentiment, _ in text_list]
 
-        # Split the data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Split the data into training, validation, and testing sets
+        X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.4, random_state=42)
+        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
 
         print("Training set size:", len(X_train))
+        print("Validation set size:", len(X_val))
         print("Testing set size:", len(X_test))
 
-        # Split the training set into a training set and a validation set for hyperparameter tuning
-        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+        # Hyperparameter tuning
+        hyperparameters = [
+            {'lr': 1e-5, 'batch_size': 16, 'num_epochs': 3},
+            {'lr': 5e-5, 'batch_size': 32, 'num_epochs': 4},
+            {'lr': 1e-4, 'batch_size': 64, 'num_epochs': 5},
+        ]
 
-        # Hyperparameter grid for tuning
-        param_grid = {
-            'lr': [1e-5, 5e-5, 1e-4],
-            'batch_size': [16, 32, 64],
-            'num_epochs': [3, 4, 5]
-        }
+        best_f1_score = 0
+        best_hyperparameters = {}
+        best_predictions = []
 
-        # Create a function for model training and evaluation
-        def train_and_evaluate(lr, batch_size, num_epochs):
+        for params in hyperparameters:
+            lr = params['lr']
+            batch_size = params['batch_size']
+            num_epochs = params['num_epochs']
+
             print(f"Hyperparameters: lr={lr}, batch_size={batch_size}, num_epochs={num_epochs}")
+
             bert_model = fine_tune_bert(X_train, y_train, lr=lr, batch_size=batch_size, num_epochs=num_epochs)
-            report = evaluate_bert(bert_model, X_val, y_val)
-            return report
 
-        # Create a grid search object
-        grid_search = GridSearchCV(
-            estimator=BertForSequenceClassification,  # Define the BERT estimator class
-            param_grid=param_grid,
-            scoring='f1_macro',
-            cv=3,
-            verbose=2,
-            n_jobs=-1
-        )
+            report, predictions = evaluate_bert(bert_model, X_val, y_val)
+            f1 = f1_score(label_encoder.transform(y_val), predictions, average='macro')
 
-        # Perform grid search
-        grid_search.fit(X_train, y_train)
+            print(f"F1 Score: {f1}")
 
-        # Get the best hyperparameters
-        best_lr = grid_search.best_params_['lr']
-        best_batch_size = grid_search.best_params_['batch_size']
-        best_num_epochs = grid_search.best_params_['num_epochs']
+            if f1 > best_f1_score:
+                best_f1_score = f1
+                best_hyperparameters = params
+                best_predictions = predictions
 
         print("Best Hyperparameters:")
-        print(f"Learning Rate: {best_lr}")
-        print(f"Batch Size: {best_batch_size}")
-        print(f"Number of Epochs: {best_num_epochs}")
+        print(best_hyperparameters)
+        print("Best F1 Score:", best_f1_score)
 
-        # Fine-tune the model with the best hyperparameters on the entire training set
-        best_model = fine_tune_bert(X_train, y_train, lr=best_lr, batch_size=best_batch_size, num_epochs=best_num_epochs)
+        # Train the best model with these hyperparameters on the entire training seta
+        best_bert_model = fine_tune_bert(X_train + X_val, y_train + y_val, lr=best_hyperparameters['lr'],
+                                         batch_size=best_hyperparameters['batch_size'],
+                                         num_epochs=best_hyperparameters['num_epochs'])
 
         # Evaluate the best model on the test set
-        test_report = evaluate_bert(best_model, X_test, y_test)
+        test_report, test_predictions = evaluate_bert(best_bert_model, X_test, y_test)
 
-        print("BERT Model Results with Best Hyperparameters:")
-        print("Classification Report on Test Set:")
+        print("Best BERT Model Results:")
+        print("Classification Report (Test Set):")
         print(test_report)
+
+        # Calculate F1 score for the test set
+        test_f1 = f1_score(label_encoder.transform(y_test), test_predictions, average='macro')
+        print(f"F1 Score (Test Set): {test_f1}")
     else:
         print("Failed to read text from the CSV file.")
 
