@@ -119,3 +119,20 @@ Time Constraints: Training deep learning models can be time-consuming. Tradition
 
 9. Error Analysis: Analyze the model's predictions to understand where it may be making errors. This can guide further improvements.
 
+
+20/10 Report:
+
+Optimization 1: Reduce Batch Size
+Reduced the batch size from 16 to 8 in the training loop. Smaller batch sizes consume less memory.
+
+Optimization 2: Use a Smaller Model
+Changed the model from "bert-base-uncased" to "distilbert-base-uncased", which is a smaller and lighter version of BERT. Smaller models have fewer parameters and consume less memory.
+
+Optimization 3: Reduce the Number of Training Instances
+Reduced the number of training instances to 960,000. You can further reduce this number based on the available resources.
+
+Optimization 4: Use GPU
+You should ensure you are running the code on a system with a GPU to take advantage of faster computation and to handle the memory requirements.
+
+Optimization 5: Fine-Tune Hyperparameters
+Fine-tuning hyperparameters such as the learning rate, batch size, and number of training epochs can help improve the model's performance while balancing memory usage.

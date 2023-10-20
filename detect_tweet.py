@@ -3,29 +3,21 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from transformers import BertTokenizer, BertForSequenceClassification  # Import BERT-related libraries here
+from transformers import DistilBertTokenizer, DistilBertForSequenceClassification  # Use DistilBERT
 from torch.utils.data import DataLoader, TensorDataset
 import torch
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import f1_score
 
 # Download NLTK stopwords if you haven't already
 nltk.download('stopwords')
 nltk.download('punkt')
 
 # Define the global tokenizer and label_encoder
-tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
 label_encoder = LabelEncoder()
-
-# Import BERT-related libraries
-from transformers import BertTokenizer, BertForSequenceClassification
-from torch.utils.data import DataLoader, TensorDataset
-import torch
-from sklearn.metrics import classification_report
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import f1_score
 
 # Function to map numeric sentiment labels to human-readable labels
 def map_sentiment(value):
@@ -59,7 +51,7 @@ def preprocess_text(text):
     return text
 
 # Function to read text from a CSV file and preprocess it
-def read_text_from_csv(file_path, max_instances=1600000):
+def read_text_from_csv(file_path, max_instances=960000):
     try:
         text_list = []
         with open(file_path, 'r', encoding='latin-1') as csv_file:
@@ -82,18 +74,16 @@ def read_text_from_csv(file_path, max_instances=1600000):
         return None
 
 # Function to fine-tune a BERT model for sentiment analysis
-def fine_tune_bert(X_train, y_train, lr=1e-5, batch_size=16, num_epochs=3):
-    # Load pre-trained BERT model and tokenizer
-    model_name = "bert-base-uncased"
-    tokenizer = BertTokenizer.from_pretrained(model_name)
-    model = BertForSequenceClassification.from_pretrained(model_name, num_labels=3)
+def fine_tune_bert(X_train, y_train, lr=1e-5, batch_size=8, num_epochs=3):
+    # Load pre-trained BERT model and tokenizer (used DistilBERT)
+    model_name = "distilbert-base-uncased"
+    model = DistilBertForSequenceClassification.from_pretrained(model_name, num_labels=3)
 
     # Tokenize and convert text data to PyTorch tensors
     X_train_encoded = tokenizer(X_train, padding=True, truncation=True, return_tensors='pt', max_length=64)
 
     # Encode labels (negative, neutral, positive)
-    label_encoder = LabelEncoder()
-    y_train_encoded = label_encoder.fit_transform(y_train)  # Define label_encoder here
+    y_train_encoded = label_encoder.fit_transform(y_train)
 
     # Create DataLoader for batch processing
     train_data = TensorDataset(X_train_encoded.input_ids, X_train_encoded.attention_mask, torch.tensor(y_train_encoded))
@@ -117,7 +107,6 @@ def fine_tune_bert(X_train, y_train, lr=1e-5, batch_size=16, num_epochs=3):
     # Return the fine-tuned model
     return model
 
-
 # Function to evaluate a BERT model on test data
 def evaluate_bert(model, X_test, y_test):
     # Tokenize and convert test data to PyTorch tensors
@@ -128,7 +117,7 @@ def evaluate_bert(model, X_test, y_test):
 
     # Create DataLoader for batch processing
     test_data = TensorDataset(X_test_encoded.input_ids, X_test_encoded.attention_mask, torch.tensor(y_test_encoded))
-    test_dataloader = DataLoader(test_data, batch_size=16)
+    test_dataloader = DataLoader(test_data, batch_size=8)  # Reduced batch size
 
     # Evaluation
     model.eval()
@@ -152,8 +141,8 @@ def evaluate_bert(model, X_test, y_test):
 # Main function
 def main():
     file_path = 'datasets/dataset_tweet.csv'  # Update this with the actual file path
-    max_instances = 1600000  # Specify the maximum number of instances to read
-    # max 1600000
+    max_instances = 960000  # Specify the maximum number of instances to read
+
     text_list = read_text_from_csv(file_path, max_instances)
 
     if text_list:
@@ -173,9 +162,9 @@ def main():
 
         # Hyperparameter tuning
         hyperparameters = [
-            {'lr': 1e-5, 'batch_size': 16, 'num_epochs': 3},
-            {'lr': 5e-5, 'batch_size': 32, 'num_epochs': 4},
-            {'lr': 1e-4, 'batch_size': 64, 'num_epochs': 5},
+            {'lr': 1e-5, 'batch_size': 8, 'num_epochs': 3},  # Reduced batch size
+            {'lr': 5e-5, 'batch_size': 16, 'num_epochs': 4},
+            {'lr': 1e-4, 'batch_size': 32, 'num_epochs': 5},
         ]
 
         best_f1_score = 0
@@ -205,7 +194,7 @@ def main():
         print(best_hyperparameters)
         print("Best F1 Score:", best_f1_score)
 
-        # Train the best model with these hyperparameters on the entire training seta
+        # Train the best model with these hyperparameters on the entire training set
         best_bert_model = fine_tune_bert(X_train + X_val, y_train + y_val, lr=best_hyperparameters['lr'],
                                          batch_size=best_hyperparameters['batch_size'],
                                          num_epochs=best_hyperparameters['num_epochs'])
